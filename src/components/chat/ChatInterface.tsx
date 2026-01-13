@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { streamChat } from "@/lib/ai-chat";
+import { useToast } from "@/hooks/use-toast";
 
 interface Message {
   id: string;
@@ -26,38 +28,91 @@ What position are you applying for?`,
 
 export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
-  const [isTyping, setIsTyping] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isTyping]);
+  }, [messages, isStreaming]);
 
   const handleSend = async (content: string, file?: File) => {
+    let userContent = content;
+    
+    // Handle file upload - read file content
+    if (file) {
+      try {
+        const fileContent = await readFileContent(file);
+        userContent = content 
+          ? `${content}\n\n--- Uploaded File: ${file.name} ---\n${fileContent}`
+          : `Here's the content from my uploaded file (${file.name}):\n\n${fileContent}`;
+      } catch (error) {
+        toast({
+          title: "File Error",
+          description: "Could not read the uploaded file. Please try pasting the content instead.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: file ? `${content}\n\n📎 Attached: ${file.name}` : content,
+      content: file && content ? `${content}\n\n📎 Attached: ${file.name}` : (file ? `📎 Uploaded: ${file.name}` : content),
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    setIsTyping(true);
+    setIsStreaming(true);
 
-    // Simulate AI response - this will be replaced with actual AI integration
-    setTimeout(() => {
-      const aiResponse = generateMockResponse(content, file);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: aiResponse,
-        },
-      ]);
-      setIsTyping(false);
-    }, 1500);
+    // Prepare messages for API (excluding the welcome message, using actual content)
+    const apiMessages = [
+      ...messages.filter(m => m.id !== "welcome").map(m => ({ role: m.role, content: m.content })),
+      { role: "user" as const, content: userContent }
+    ];
+
+    let assistantContent = "";
+
+    await streamChat({
+      messages: apiMessages,
+      onDelta: (chunk) => {
+        assistantContent += chunk;
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant" && last.id.startsWith("streaming-")) {
+            return prev.map((m, i) => 
+              i === prev.length - 1 ? { ...m, content: assistantContent } : m
+            );
+          }
+          return [...prev, { 
+            id: `streaming-${Date.now()}`, 
+            role: "assistant", 
+            content: assistantContent 
+          }];
+        });
+      },
+      onDone: () => {
+        setIsStreaming(false);
+        // Finalize the message ID
+        setMessages((prev) => 
+          prev.map((m, i) => 
+            i === prev.length - 1 && m.role === "assistant" 
+              ? { ...m, id: `final-${Date.now()}` } 
+              : m
+          )
+        );
+      },
+      onError: (error) => {
+        setIsStreaming(false);
+        toast({
+          title: "Error",
+          description: error,
+          variant: "destructive",
+        });
+      },
+    });
   };
 
   return (
@@ -76,7 +131,7 @@ export function ChatInterface() {
               content={message.content}
             />
           ))}
-          {isTyping && (
+          {isStreaming && messages[messages.length - 1]?.role !== "assistant" && (
             <ChatMessage role="assistant" content="" isTyping />
           )}
         </div>
@@ -85,7 +140,7 @@ export function ChatInterface() {
       <div className="p-4 border-t border-border/50">
         <ChatInput
           onSend={handleSend}
-          disabled={isTyping}
+          disabled={isStreaming}
           placeholder="Paste job description or type a message..."
         />
       </div>
@@ -93,58 +148,18 @@ export function ChatInterface() {
   );
 }
 
-function generateMockResponse(content: string, file?: File): string {
-  const lowerContent = content.toLowerCase();
-
-  if (file) {
-    return `I've received your file: **${file.name}**
-
-I'm analyzing the document now. This will help me understand the job requirements better.
-
-While I process this, could you tell me:
-1. How many years of experience do you have in this field?
-2. What's your current job title?`;
-  }
-
-  if (lowerContent.includes("software") || lowerContent.includes("developer") || lowerContent.includes("engineer")) {
-    return `I can see you're targeting a **technical role**. That's great!
-
-I've identified some key requirements from what you've shared. To create a CV that stands out, I need to know more about you:
-
-**Let's start with the basics:**
-What's your full name?`;
-  }
-
-  if (lowerContent.includes("manager") || lowerContent.includes("lead") || lowerContent.includes("director")) {
-    return `This looks like a **leadership position**. I'll make sure to highlight your management experience and achievements.
-
-To tailor your CV perfectly, I'll need some information:
-
-**First question:**
-What's your full name?`;
-  }
-
-  // Default response for job descriptions
-  if (content.length > 100) {
-    return `I've analyzed the job description you provided. Here's what I found:
-
-**Key Requirements Identified:**
-• Technical skills and qualifications
-• Experience level expectations
-• Core responsibilities
-
-Now, let me gather your information to create a tailored CV.
-
-**What's your full name?**`;
-  }
-
-  return `Thanks for that information!
-
-To create the best CV for you, I have a few more questions.
-
-Could you share the **job description** you're targeting? You can:
-• Paste it directly here
-• Upload a file using the 📎 button
-
-This helps me optimize your CV with the right keywords and focus.`;
+async function readFileContent(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result;
+      if (typeof content === "string") {
+        resolve(content);
+      } else {
+        reject(new Error("Could not read file"));
+      }
+    };
+    reader.onerror = () => reject(new Error("File read error"));
+    reader.readAsText(file);
+  });
 }

@@ -1,8 +1,10 @@
 import { Header } from "@/components/landing/Header";
 import { Hero } from "@/components/landing/Hero";
-import { ChatInterface } from "@/components/chat/ChatInterface";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { Footer } from "@/components/landing/Footer";
+import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
+import { ArrowRight, CheckCircle } from "lucide-react";
 
 const Index = () => {
   return (
@@ -11,18 +13,40 @@ const Index = () => {
       
       <main className="flex-1">
         <Hero />
-        
-        <section id="features" className="py-12 pb-20">
-          <div className="container max-w-4xl">
-            <div className="text-center mb-8">
-              <h2 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-3">
-                Start Building Your CV
-              </h2>
-              <p className="text-muted-foreground">
-                Chat with our AI assistant to create your tailored resume
-              </p>
+
+        {/* CTA Section */}
+        <section className="py-16 bg-card/50">
+          <div className="container text-center">
+            <h2 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-4">
+              Ready to Land Your Dream Job?
+            </h2>
+            <p className="text-muted-foreground mb-8 max-w-lg mx-auto">
+              Start creating your professional CV in minutes with our AI-powered assistant
+            </p>
+            
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
+              <Link to="/builder">
+                <Button size="lg" className="gap-2 hero-gradient border-0 text-primary-foreground hover:opacity-90 px-8">
+                  Start Building Your CV
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              </Link>
             </div>
-            <ChatInterface />
+
+            <div className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-primary" />
+                Free to use
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-primary" />
+                No signup required
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-primary" />
+                Instant PDF download
+              </div>
+            </div>
           </div>
         </section>
 

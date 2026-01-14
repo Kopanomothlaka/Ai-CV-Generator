@@ -1,14 +1,19 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { streamChat } from "@/lib/ai-chat";
 import { useToast } from "@/hooks/use-toast";
+import { parseCVFromText, CVData } from "@/lib/pdf-generator";
 
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
+}
+
+interface ChatInterfaceProps {
+  onCVUpdate?: (data: CVData | null) => void;
 }
 
 const INITIAL_MESSAGE: Message = {
@@ -26,17 +31,37 @@ I'm here to help you create a tailored, professional CV optimized for your targe
 What position are you applying for?`,
 };
 
-export function ChatInterface() {
+export function ChatInterface({ onCVUpdate }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
   const [isStreaming, setIsStreaming] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  // Parse CV from all assistant messages whenever they change
+  const updateCVPreview = useCallback((msgs: Message[]) => {
+    if (!onCVUpdate) return;
+    
+    // Find the latest assistant message that contains CV content
+    const assistantMessages = msgs.filter(m => m.role === "assistant" && m.id !== "welcome");
+    for (let i = assistantMessages.length - 1; i >= 0; i--) {
+      const cvData = parseCVFromText(assistantMessages[i].content);
+      if (cvData) {
+        onCVUpdate(cvData);
+        return;
+      }
+    }
+    onCVUpdate(null);
+  }, [onCVUpdate]);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isStreaming]);
+
+  useEffect(() => {
+    updateCVPreview(messages);
+  }, [messages, updateCVPreview]);
 
   const handleSend = async (content: string, file?: File) => {
     let userContent = content;

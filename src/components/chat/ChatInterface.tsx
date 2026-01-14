@@ -5,6 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { streamChat } from "@/lib/ai-chat";
 import { useToast } from "@/hooks/use-toast";
 import { parseCVFromText, CVData } from "@/lib/pdf-generator";
+import { parseFile, isValidCVFile } from "@/lib/file-parser";
 
 interface Message {
   id: string;
@@ -65,18 +66,53 @@ export function ChatInterface({ onCVUpdate }: ChatInterfaceProps) {
 
   const handleSend = async (content: string, file?: File) => {
     let userContent = content;
+    let fileDisplayName = "";
     
-    // Handle file upload - read file content
+    // Handle file upload - parse file content
     if (file) {
+      const validation = isValidCVFile(file);
+      if (!validation.valid) {
+        toast({
+          title: "Invalid File",
+          description: validation.error,
+          variant: "destructive",
+        });
+        return;
+      }
+
       try {
-        const fileContent = await readFileContent(file);
-        userContent = content 
-          ? `${content}\n\n--- Uploaded File: ${file.name} ---\n${fileContent}`
-          : `Here's the content from my uploaded file (${file.name}):\n\n${fileContent}`;
+        toast({
+          title: "Processing file...",
+          description: `Extracting content from ${file.name}`,
+        });
+        
+        const fileContent = await parseFile(file);
+        fileDisplayName = file.name;
+        
+        // Detect if it's a CV upload
+        const isCVUpload = fileContent.toLowerCase().includes('experience') || 
+                          fileContent.toLowerCase().includes('education') ||
+                          fileContent.toLowerCase().includes('skills') ||
+                          fileContent.toLowerCase().includes('resume') ||
+                          fileContent.toLowerCase().includes('cv');
+        
+        if (isCVUpload && !content) {
+          userContent = `I'm uploading my existing CV for you to analyze and improve. Please review it and suggest enhancements to make it more professional and ATS-optimized. Here's my CV content:\n\n${fileContent}`;
+        } else if (content) {
+          userContent = `${content}\n\n--- Content from ${file.name} ---\n${fileContent}`;
+        } else {
+          userContent = `Here's the content from my uploaded file (${file.name}):\n\n${fileContent}`;
+        }
+        
+        toast({
+          title: "File processed",
+          description: `Successfully extracted content from ${file.name}`,
+        });
       } catch (error) {
+        console.error("File parsing error:", error);
         toast({
           title: "File Error",
-          description: "Could not read the uploaded file. Please try pasting the content instead.",
+          description: error instanceof Error ? error.message : "Could not read the uploaded file. Please try a different format or paste the content instead.",
           variant: "destructive",
         });
         return;
@@ -86,7 +122,7 @@ export function ChatInterface({ onCVUpdate }: ChatInterfaceProps) {
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: file && content ? `${content}\n\n📎 Attached: ${file.name}` : (file ? `📎 Uploaded: ${file.name}` : content),
+      content: file && content ? `${content}\n\n📎 Attached: ${fileDisplayName}` : (file ? `📎 Uploaded: ${fileDisplayName}\n\nAnalyzing your CV...` : content),
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -171,20 +207,4 @@ export function ChatInterface({ onCVUpdate }: ChatInterfaceProps) {
       </div>
     </div>
   );
-}
-
-async function readFileContent(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target?.result;
-      if (typeof content === "string") {
-        resolve(content);
-      } else {
-        reject(new Error("Could not read file"));
-      }
-    };
-    reader.onerror = () => reject(new Error("File read error"));
-    reader.readAsText(file);
-  });
 }

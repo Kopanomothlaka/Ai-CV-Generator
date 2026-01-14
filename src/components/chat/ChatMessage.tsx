@@ -1,8 +1,9 @@
 import { cn } from "@/lib/utils";
-import { User, Bot, Download } from "lucide-react";
+import { User, Bot, Download, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { parseCVFromText, downloadCV } from "@/lib/pdf-generator";
-import { useMemo } from "react";
+import { downloadCVAsWord } from "@/lib/word-generator";
+import { useMemo, useState } from "react";
 
 interface ChatMessageProps {
   role: "user" | "assistant";
@@ -28,9 +29,22 @@ export function ChatMessage({ role, content, isTyping }: ChatMessageProps) {
     return parseCVFromText(content);
   }, [role, content]);
 
-  const handleDownload = () => {
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const handleDownloadPdf = () => {
     if (cvData) {
       downloadCV(cvData, `${cvData.name.replace(/\s+/g, '_')}_CV.pdf`);
+    }
+  };
+
+  const handleDownloadWord = async () => {
+    if (cvData) {
+      setIsDownloading(true);
+      try {
+        await downloadCVAsWord(cvData, `${cvData.name.replace(/\s+/g, '_')}_CV.docx`);
+      } finally {
+        setIsDownloading(false);
+      }
     }
   };
 
@@ -71,14 +85,26 @@ export function ChatMessage({ role, content, isTyping }: ChatMessageProps) {
         </div>
         
         {cvData && (
-          <Button
-            onClick={handleDownload}
-            className="self-start gap-2 bg-primary hover:bg-primary/90"
-            size="sm"
-          >
-            <Download className="w-4 h-4" />
-            Download CV as PDF
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              onClick={handleDownloadPdf}
+              className="gap-2 bg-primary hover:bg-primary/90"
+              size="sm"
+            >
+              <Download className="w-4 h-4" />
+              Download PDF
+            </Button>
+            <Button
+              onClick={handleDownloadWord}
+              variant="outline"
+              className="gap-2"
+              size="sm"
+              disabled={isDownloading}
+            >
+              <FileText className="w-4 h-4" />
+              {isDownloading ? "Generating..." : "Download Word"}
+            </Button>
+          </div>
         )}
       </div>
     </div>

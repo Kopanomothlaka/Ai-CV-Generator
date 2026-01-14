@@ -1,9 +1,14 @@
+import { useState } from "react";
 import { Header } from "@/components/landing/Header";
 import { ChatInterface } from "@/components/chat/ChatInterface";
+import { CVPreview } from "@/components/cv/CVPreview";
 import { Footer } from "@/components/landing/Footer";
-import { FileText, Sparkles, Shield, Zap } from "lucide-react";
+import { FileText, Sparkles, Shield, Zap, Eye } from "lucide-react";
+import { CVData } from "@/lib/pdf-generator";
 
 const BuilderPage = () => {
+  const [cvData, setCvData] = useState<CVData | null>(null);
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
@@ -29,11 +34,31 @@ const BuilderPage = () => {
             <FeaturePill icon={<FileText className="w-3.5 h-3.5" />} text="Professional Format" />
             <FeaturePill icon={<Shield className="w-3.5 h-3.5" />} text="ATS Optimized" />
             <FeaturePill icon={<Zap className="w-3.5 h-3.5" />} text="Instant PDF Export" />
+            <FeaturePill icon={<Eye className="w-3.5 h-3.5" />} text="Live Preview" />
           </div>
 
-          {/* Chat Interface */}
-          <div className="max-w-4xl mx-auto">
-            <ChatInterface />
+          {/* Two Column Layout: Chat + Preview */}
+          <div className="grid lg:grid-cols-2 gap-6 max-w-7xl mx-auto">
+            {/* Chat Interface */}
+            <div className="order-2 lg:order-1">
+              <ChatInterface onCVUpdate={setCvData} />
+            </div>
+
+            {/* Live CV Preview */}
+            <div className="order-1 lg:order-2">
+              <div className="glass-card rounded-2xl overflow-hidden h-[600px] max-h-[70vh] flex flex-col">
+                <div className="px-6 py-4 border-b border-border/50 flex items-center gap-2">
+                  <Eye className="w-4 h-4 text-primary" />
+                  <h3 className="font-semibold text-foreground">Live Preview</h3>
+                  <span className="text-xs text-muted-foreground ml-auto">
+                    {cvData ? "CV detected" : "Awaiting content..."}
+                  </span>
+                </div>
+                <div className="flex-1 overflow-hidden bg-muted/30">
+                  <CVPreview data={cvData} />
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Tips Section */}
